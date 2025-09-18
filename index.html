@@ -96,7 +96,10 @@
             from { opacity: 0; transform: scale(0.9); }
             to { opacity: 1; transform: scale(1); }
         }
-        
+        .long-text {
+            word-break: break-word;
+            white-space: normal;
+        }
     </style>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -184,10 +187,13 @@
             document.getElementById('export-excel-btn').addEventListener('click', exportToExcel);
             document.getElementById('export-obs-excel-btn').addEventListener('click', exportObsToExcel);
             document.getElementById('data-filtro').addEventListener('change', renderDashboard);
-            document.getElementById('export-image-btn').addEventListener('click', exportToImage);
             document.getElementById('gerar-resumo-btn').addEventListener('click', gerarAnaliseDiaria);
             document.getElementById('image-upload-btn').addEventListener('click', () => document.getElementById('image-upload').click());
             document.getElementById('image-upload').addEventListener('change', handleImageUpload);
+            document.getElementById('copy-analysis-btn').addEventListener('click', copyAnalysis);
+            document.getElementById('export-charts-btn').addEventListener('click', exportChartsToImage);
+            document.getElementById('export-table-btn').addEventListener('click', exportTableToImage);
+            document.getElementById('message-ok-btn').addEventListener('click', closeMessageModal);
 
             document.getElementById('edit-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -554,6 +560,16 @@
 
             const observacoesData = data.filter(item => item.OBSERVACAO && item.OBSERVACAO.trim() !== '');
 
+            const formatText = (text) => text && text.trim() !== '' ? text.replace(/\n/g, '<br>') : '';
+            const formatName = (name) => {
+                if (!name || name.trim() === '') return '';
+                const parts = name.split(' ');
+                if (parts.length > 2) {
+                    return `${parts[0]} ${parts[1]}`;
+                }
+                return name;
+            };
+
             data.forEach(item => {
                 const row = document.createElement('tr');
                 row.classList.add('border-b', 'border-gray-200', 'hover:bg-gray-50');
@@ -572,13 +588,13 @@
                 }
                 
                 row.innerHTML = `
-                    <td class="py-3 px-6 text-left whitespace-nowrap">${item.DATA || 'N/A'}</td>
-                    <td class="py-3 px-6 text-left">${item.EQUIPAMENTO || 'N/A'}</td>
-                    <td class="py-3 px-6 text-left">${item.TAG || 'N/A'}</td>
-                    <td class="py-3 px-6 text-left"><span class="status-badge ${statusColor}">${item.STATUS || 'N/A'}</span></td>
-                    <td class="py-3 px-6 text-left">${item.MOTORISTA || 'N/A'}</td>
-                    <td class="py-3 px-6 text-left">${item.NOME1 || 'N/A'}</td>
-                    <td class="py-3 px-6 text-left">${item.NOME2 || 'N/A'}</td>
+                    <td class="py-3 px-6 text-left whitespace-nowrap">${formatText(item.DATA)}</td>
+                    <td class="py-3 px-6 text-left">${formatText(item.EQUIPAMENTO)}</td>
+                    <td class="py-3 px-6 text-left">${formatText(item.TAG)}</td>
+                    <td class="py-3 px-6 text-left"><span class="status-badge ${statusColor}">${formatText(item.STATUS)}</span></td>
+                    <td class="py-3 px-6 text-left long-text">${formatName(item.MOTORISTA)}</td>
+                    <td class="py-3 px-6 text-left long-text">${formatName(item.NOME1)}</td>
+                    <td class="py-3 px-6 text-left long-text">${formatName(item.NOME2)}</td>
                     <td class="py-3 px-6 text-right">
                         ${(userId === creatorId) ? `
                             <button onclick="editEntry('${item.id}')" class="text-indigo-600 hover:text-indigo-900 mx-1">
@@ -603,10 +619,10 @@
                     const row = document.createElement('tr');
                     row.classList.add('border-b', 'border-gray-200', 'hover:bg-gray-50');
                     row.innerHTML = `
-                        <td class="py-3 px-6 text-left whitespace-nowrap">${item.DATA || 'N/A'}</td>
-                        <td class="py-3 px-6 text-left">${item.EQUIPAMENTO || 'N/A'}</td>
-                        <td class="py-3 px-6 text-left">${item.TAG || 'N/A'}</td>
-                        <td class="py-3 px-6 text-left">${item.OBSERVACAO || 'N/A'}</td>
+                        <td class="py-3 px-6 text-left whitespace-nowrap">${formatText(item.DATA)}</td>
+                        <td class="py-3 px-6 text-left">${formatText(item.EQUIPAMENTO)}</td>
+                        <td class="py-3 px-6 text-left">${formatText(item.TAG)}</td>
+                        <td class="py-3 px-6 text-left long-text">${formatText(item.OBSERVACAO)}</td>
                     `;
                     observacoesTabela.appendChild(row);
                 });
@@ -727,10 +743,12 @@
             const analiseSection = document.getElementById('analise-section');
             const analiseContent = document.getElementById('analise-content');
             const gerarResumoBtn = document.getElementById('gerar-resumo-btn');
+            const copyBtn = document.getElementById('copy-analysis-btn');
 
             analiseSection.style.display = 'block';
             analiseContent.innerHTML = '<div class="flex items-center space-x-2 text-gray-500"><div class="loading-spinner"></div><span>Gerando análise...</span></div>';
             gerarResumoBtn.disabled = true;
+            copyBtn.disabled = true;
 
             const textData = JSON.stringify(filteredData, null, 2);
 
@@ -747,7 +765,9 @@
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: userQuery }] }],
+                    }),
                 });
 
                 if (!response.ok) {
@@ -764,7 +784,64 @@
                 analiseContent.innerHTML = `<span class="text-red-500">Erro ao gerar a análise. Por favor, tente novamente.</span>`;
             } finally {
                 gerarResumoBtn.disabled = false;
+                copyBtn.disabled = false;
             }
+        }
+
+        function copyAnalysis() {
+            const analysisContent = document.getElementById('analise-content');
+            const textToCopy = analysisContent.innerText;
+            if (textToCopy && textToCopy.length > 0) {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = textToCopy;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showMessageModal("Análise copiada para a área de transferência!", true);
+            } else {
+                showMessageModal("Não há análise para copiar.", false);
+            }
+        }
+        
+        // Função para gerar imagem de uma seção específica
+        async function captureAndDownload(elementId, fileName, buttonId) {
+            const button = document.getElementById(buttonId);
+            button.disabled = true;
+            const originalContent = button.innerHTML;
+            button.innerHTML = '<span class="loading-spinner h-5 w-5 mr-2"></span> Gerando...';
+            
+            try {
+                const element = document.getElementById(elementId);
+                const canvas = await html2canvas(element, { 
+                    scale: 2, 
+                    useCORS: true, 
+                    backgroundColor: '#F4F7F9' 
+                });
+
+                const link = document.createElement('a');
+                link.href = canvas.toDataURL('image/png');
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error('Erro ao gerar a imagem:', error);
+                showMessageModal('Ocorreu um erro ao gerar a imagem. Por favor, tente novamente.', false);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalContent;
+            }
+        }
+
+        // Nova função para exportar gráficos e cards
+        function exportChartsToImage() {
+            captureAndDownload('charts-and-cards-container', `relatorio_graficos_${document.getElementById('data-filtro').value}.png`, 'export-charts-btn');
+        }
+
+        // Nova função para exportar a tabela de detalhes
+        function exportTableToImage() {
+            captureAndDownload('details-table-container', `relatorio_tabela_${document.getElementById('data-filtro').value}.png`, 'export-table-btn');
         }
         
         function exportToExcel() {
@@ -822,83 +899,6 @@
             downloadLink.click();
             document.body.removeChild(downloadLink);
         }
-
-        async function exportToImage() {
-            const gerarImagemBtn = document.getElementById('export-image-btn');
-            const dashboardContainer = document.querySelector('.dashboard-container');
-
-            gerarImagemBtn.disabled = true;
-            gerarImagemBtn.innerHTML = '<span class="loading-spinner h-5 w-5 mr-2"></span> Gerando Imagem...';
-
-            // Ocultar elementos que não devem aparecer na imagem
-            const elementsToHide = [
-                document.getElementById('data-entry-section'),
-                document.getElementById('data-filter-controls'),
-                document.getElementById('gerar-resumo-btn'),
-                document.getElementById('export-image-btn'),
-                document.getElementById('export-excel-btn'),
-                document.getElementById('export-obs-excel-btn')
-            ];
-            const originalDisplayStates = elementsToHide.map(el => el ? el.style.display : null);
-            elementsToHide.forEach(el => { if (el) el.style.display = 'none'; });
-
-            // Criar um container temporário para renderização
-            const exportContainer = document.createElement('div');
-            // Usar o scrollWidth e scrollHeight do elemento principal para garantir que tudo seja incluído
-            exportContainer.style.width = dashboardContainer.scrollWidth + 'px';
-            exportContainer.style.height = dashboardContainer.scrollHeight + 'px';
-            exportContainer.style.position = 'absolute';
-            exportContainer.style.left = '-9999px';
-            exportContainer.style.top = '-9999px';
-            exportContainer.style.backgroundColor = '#F4F7F9';
-            exportContainer.style.padding = '32px';
-
-            // Clonar o dashboard e anexar ao contêiner temporário
-            const clonedDashboard = dashboardContainer.cloneNode(true);
-            exportContainer.appendChild(clonedDashboard);
-            document.body.appendChild(exportContainer);
-
-            try {
-                // Capturar a imagem com html2canvas
-                const canvas = await html2canvas(exportContainer, {
-                    scale: 2, // Alta resolução
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: '#F4F7F9'
-                });
-
-                // Redimensionar para caber em monitor (1920px de largura, altura proporcional)
-                const targetWidth = 1920;
-                const aspectRatio = canvas.height / canvas.width;
-                const targetHeight = Math.round(targetWidth * aspectRatio);
-
-                const finalCanvas = document.createElement('canvas');
-                finalCanvas.width = targetWidth;
-                finalCanvas.height = targetHeight;
-                const ctx = finalCanvas.getContext('2d');
-                ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
-
-                // Baixar a imagem
-                const image = finalCanvas.toDataURL('image/png');
-                const link = document.createElement('a');
-                link.href = image;
-                link.download = `relatorio_operacoes_${document.getElementById('data-filtro').value}.png`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            } catch (error) {
-                console.error('Erro ao gerar a imagem:', error);
-                showMessageModal('Ocorreu um erro ao gerar a imagem. Por favor, tente novamente.', false);
-            } finally {
-                // Remover o contêiner temporário e restaurar os elementos ocultos
-                exportContainer.remove();
-                elementsToHide.forEach((el, index) => {
-                    if (el) el.style.display = originalDisplayStates[index];
-                });
-                gerarImagemBtn.disabled = false;
-                gerarImagemBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" /></svg> Gerar Imagem';
-            }
-        }
     </script>
     <div class="max-w-7xl mx-auto py-8 px-4 dashboard-container">
         <header class="mb-8 flex justify-between items-center flex-wrap">
@@ -915,11 +915,17 @@
                 <button id="gerar-resumo-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="gerarAnaliseDiaria()">
                     Gerar Resumo Diário ✨
                 </button>
-                <button id="export-image-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
+                <button id="export-charts-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+                        <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
                     </svg>
-                    Gerar Imagem
+                    Gerar Imagem dos Gráficos
+                </button>
+                 <button id="export-table-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Gerar Imagem da Tabela
                 </button>
             </div>
         </header>
@@ -969,90 +975,100 @@
             </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="card p-6 flex items-center space-x-4 bg-gray-100 border-l-4 border-gray-500 cursor-default hover:transform-none">
-                <div class="p-3 bg-gray-500 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 20.7L4 17.5v-5l6-3.2L16 9.5v5L10 20.7z"></path><path d="M22 17.5l-6 3.2-6-3.2L16 9.5l6 3.2v5z"></path></svg>
+        <div id="charts-and-cards-container">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="card p-6 flex items-center space-x-4 bg-gray-100 border-l-4 border-gray-500 cursor-default hover:transform-none">
+                    <div class="p-3 bg-gray-500 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 20.7L4 17.5v-5l6-3.2L16 9.5v5L10 20.7z"></path><path d="M22 17.5l-6 3.2-6-3.2L16 9.5l6 3.2v5z"></path></svg>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 font-semibold">Total de Equipamentos</div>
+                        <div id="total-equipamentos" class="text-3xl font-bold text-gray-800">0</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="text-gray-500 font-semibold">Total de Equipamentos</div>
-                    <div id="total-equipamentos" class="text-3xl font-bold text-gray-800">0</div>
-                </div>
-            </div>
 
-            <div class="card p-6 flex items-center space-x-4 bg-green-100 border-l-4 border-green-500" onclick="showStatusModal('Em operação')">
-                <div class="p-3 bg-green-500 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-8.87"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <div class="card p-6 flex items-center space-x-4 bg-green-100 border-l-4 border-green-500" onclick="showStatusModal('Em operação')">
+                    <div class="p-3 bg-green-500 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-8.87"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 font-semibold">Em Operação</div>
+                        <div id="em-operacao" class="text-3xl font-bold text-gray-800">0</div>
+                        <div id="em-operacao-percent" class="text-sm font-semibold text-green-600 mt-1">0% do programado</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="text-gray-500 font-semibold">Em Operação</div>
-                    <div id="em-operacao" class="text-3xl font-bold text-gray-800">0</div>
-                    <div id="em-operacao-percent" class="text-sm font-semibold text-green-600 mt-1">0% do programado</div>
-                </div>
-            </div>
 
-            <div class="card p-6 flex items-center space-x-4 bg-red-100 border-l-4 border-red-500" onclick="showStatusModal('Reparo')">
-                <div class="p-3 bg-red-500 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <div class="card p-6 flex items-center space-x-4 bg-red-100 border-l-4 border-red-500" onclick="showStatusModal('Reparo')">
+                    <div class="p-3 bg-red-500 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 font-semibold">Em Reparo</div>
+                        <div id="em-reparo" class="text-3xl font-bold text-gray-800">0</div>
+                        <div id="em-reparo-percent" class="text-sm font-semibold text-red-600 mt-1">0% do programado</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="text-gray-500 font-semibold">Em Reparo</div>
-                    <div id="em-reparo" class="text-3xl font-bold text-gray-800">0</div>
-                    <div id="em-reparo-percent" class="text-sm font-semibold text-red-600 mt-1">0% do programado</div>
-                </div>
-            </div>
 
-            <div class="card p-6 flex items-center space-x-4 bg-yellow-100 border-l-4 border-yellow-500" onclick="showStatusModal('SEM EFETIVO')">
-                <div class="p-3 bg-yellow-500 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                <div class="card p-6 flex items-center space-x-4 bg-yellow-100 border-l-4 border-yellow-500" onclick="showStatusModal('SEM EFETIVO')">
+                    <div class="p-3 bg-yellow-500 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 font-semibold">Sem Efetivo</div>
+                        <div id="sem-efetivo" class="text-3xl font-bold text-gray-800">0</div>
+                        <div id="sem-efetivo-percent" class="text-sm font-semibold text-yellow-600 mt-1">0% do programado</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="text-gray-500 font-semibold">Sem Efetivo</div>
-                    <div id="sem-efetivo" class="text-3xl font-bold text-gray-800">0</div>
-                    <div id="sem-efetivo-percent" class="text-sm font-semibold text-yellow-600 mt-1">0% do programado</div>
+                
+                <div class="card p-6 flex items-center space-x-4 bg-purple-100 border-l-4 border-purple-500" onclick="showStatusModal('Programados')">
+                    <div class="p-3 bg-purple-500 rounded-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                    </div>
+                    <div>
+                        <div id="total-programados-text" class="text-gray-500 font-semibold">Total de Programados</div>
+                        <div id="total-programados" class="text-3xl font-bold text-gray-800">0</div>
+                        <div id="programados-percent" class="text-sm font-semibold text-purple-600 mt-1">0% do total</div>
+                    </div>
                 </div>
             </div>
             
-            <div class="card p-6 flex items-center space-x-4 bg-purple-100 border-l-4 border-purple-500" onclick="showStatusModal('Programados')">
-                <div class="p-3 bg-purple-500 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
-                </div>
-                <div>
-                    <div id="total-programados-text" class="text-gray-500 font-semibold">Total de Programados</div>
-                    <div id="total-programados" class="text-3xl font-bold text-gray-800">0</div>
-                    <div id="programados-percent" class="text-sm font-semibold text-purple-600 mt-1">0% do total</div>
+            <div class="card p-6 mb-8 cursor-default hover:transform-none" id="analise-section" style="display: none;">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Análise do Dia</h2>
+                <div id="analise-content" class="text-gray-700 leading-relaxed">
+                    </div>
+                <div class="flex justify-end mt-4">
+                    <button id="copy-analysis-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Copiar Análise
+                    </button>
                 </div>
             </div>
-        </div>
-        
-        <div class="card p-6 mb-8 cursor-default hover:transform-none" id="analise-section" style="display: none;">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">Análise do Dia</h2>
-            <div id="analise-content" class="text-gray-700 leading-relaxed">
-                </div>
-        </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="card p-6 cursor-default hover:transform-none">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Status dos Equipamentos</h2>
-                <div class="chart-container">
-                    <canvas id="statusChart"></canvas>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="card p-6 cursor-default hover:transform-none">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Status dos Equipamentos</h2>
+                    <div class="chart-container">
+                        <canvas id="statusChart"></canvas>
+                    </div>
                 </div>
-            </div>
-            <div class="card p-6 cursor-default hover:transform-none">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Programados VS Equipamentos</h2>
-                <div class="chart-container">
-                    <canvas id="programadosTotalChart"></canvas>
+                <div class="card p-6 cursor-default hover:transform-none">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Programados VS Equipamentos</h2>
+                    <div class="chart-container">
+                        <canvas id="programadosTotalChart"></canvas>
+                    </div>
                 </div>
-            </div>
-            <div class="card p-6 cursor-default hover:transform-none">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Programados VS Em Operação</h2>
-                <div class="chart-container">
-                    <canvas id="programadosOperacaoChart"></canvas>
+                <div class="card p-6 cursor-default hover:transform-none">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Programados VS Em Operação</h2>
+                    <div class="chart-container">
+                        <canvas id="programadosOperacaoChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="card p-6 mb-8 cursor-default hover:transform-none">
+        <div class="card p-6 mb-8 cursor-default hover:transform-none" id="details-table-container">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">Detalhes dos Equipamentos</h2>
             <div class="flex justify-end mb-4 space-x-2">
                 <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
@@ -1197,11 +1213,14 @@
     </div>
     
     <!-- Modal de Mensagem (Toast) -->
-    <div id="message-modal" class="modal hidden" onclick="closeMessageModal()">
+    <div id="message-modal" class="modal hidden">
         <div class="modal-content">
             <div class="flex items-center space-x-4">
                 <div id="message-icon"></div>
                 <div id="message-text" class="text-lg font-medium"></div>
+            </div>
+            <div class="mt-6 flex justify-center">
+                <button id="message-ok-btn" onclick="closeMessageModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">OK</button>
             </div>
         </div>
     </div>
