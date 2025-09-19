@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle de Operações Mecanizadas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #4f46e5;
+            animation: spin 1s ease infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .card {
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1-px rgba(0, 0, 0, 0.06);
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card.cursor-default:hover {
+            transform: none;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            position: relative;
+            background-color: #F4F7F9;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://images.unsplash.com/photo-1542362567-b5b62b1b590e?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            opacity: 0.15;
+            z-index: -1;
+        }
+        
+        .data-entry-bg {
+            background-color: #EBF8FF; /* Um azul mais claro para a seção de lançamento de dados */
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            line-height: 1rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .long-text {
+            word-break: break-word;
+            white-space: normal;
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, addDoc, onSnapshot, collection, query, where, getDocs, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        
+        setLogLevel('debug');
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        let userId;
+        const creatorId = initialAuthToken ? JSON.parse(atob(initialAuthToken.split('.')[1])).uid : null;
+        let fullDbData = [];
+        let lastUpdated = '';
+        let entryToDeleteId = null;
+        let isLoggedIn = false;
+
+        const tagsUnicas = [
+            "CA01", "CA02", "CA03", "CA04", "CA05", "CC01", "CC02", "CC03", "CH01", "CH02", "CJ01", "CV01", "CV02", "CV03", "CV04", "CV05", "CV06", "CV07", "MC EVENTUAL", "MC01", "MC02", "MC03", "MC04", "MC120", "ME01", "ME02", "RT EVENTUAL", "RT EVENTUAL 02", "RT02", "RT03"
+        ];
+        
+        const nomesColaboradores = [
+            "ADILSON JOSÉ PEIXOTO", "ALEX DOUGLAS BARBOSA", "ALEXSON FRANCISCO", "ALINE CRISTIANE DOS SANTOS",
+            "ARLINDO JERÔNIMO", "CÁSSIO RUBENS", "CELIO", "CÉLIO", "CLAUDIO NEIVA", "DANIEL JUNIOR DE MELO SANTOS",
+            "DEVÂNIO SANDER", "DIOGO LIMA", "DJALMA TEODORO DA SILVA FILHO", "ENIVALDO ALEXANDRE",
+            "ERICK LEANDRO DE LIMA CAMPOS LADISLAU", "FERNANDA PATRICIA NOGUEIRA DIA", "GILMAR ALVES",
+            "GISLENE ALMEIDA DA CRUZ", "GIOVANI ANTONIO MARTINS", "HELVEÇO EUGENIO", "HUMBERTO HENRIQUE SIONEI",
+            "ITAMAR RAIMUNDO XAVIER", "IVANILSON DIAS", "JAKSON JUNIOR AMÂNCIO", "JAQUELINE LUCIA CORREIA DA CRUZ",
+            "JEFERSON DOS SANTOS VIANA", "JORGE LUIS EZEIAS", "JOSÉ APARECIDO", "JOSIMAR PAULO DA SILVA",
+            "JUAREZ CHAGAS", "JÚLIO CÉSAR", "JUSCELIA ALMEIDA SANTOS", "LEANDRO MARCIO MODESTO",
+            "LILIANA APARECIDA CAMPOS", "LOURIVAL NUNES",
+            "LUCAS ALEXANDRE", "LUCAS FABIANO", "LUCAS ANDRÉ DOS SANTOS", "LUIZ HENRIQUE NASCIMENTO",
+            "MAICON LUCAS", "MAICON PAIVA", "MAIQUE QUERINO JERONIMO MARTINHO", "MARIANE APARECIDA DA SILVA SANTOS",
+            "MARCOS ANTONIO DA CRUZ", "MAURICIO ANDERSON EVANGELISTA", "MAURICIO ALEXANDRE", "MAURICIO GALDINO",
+            "MAURICIO TEIXEIRA DA SILVA", "MOACIR GUSTAVO", "NAIARA DOS SANTOS PINA", "OCILEY DE MIRANDA",
+            "PAULO CARDOSO", "PAULO MARCELINO", "PAULO RICARDO", "RENTATA DE FÁTIMA DA SILVA",
+            "RENAN HENRIQUE", "RIAN HENRIQUE DOSLAU", "RODRIGO ANTONIO GONCALVES DIAS", "RUTE MARIA DA FONSECA",
+            "SANDRO DE OLIVEIRA", "SANDRO ELI DE RESENDE", "SANDOVAL REGINALDO", "ULICIANA SALVADOR",
+            "VALTER DO CARMO", "VANDERLEI ALBERTO LINO", "VANDO MENDES", "VINICIUS PEREIRA DE CARVALHO",
+            "WANDERSON CARDOSO DE OLIVEIRA", "WELLIGTON DA SILVA MORENO", "LÚCIO ÂNGELO", "CARLOS GONZAGA", "ITALO ROBERT"
+        ];
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (initialAuthToken) {
+                try {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } catch (error) {
+                    console.error("Erro no login com token personalizado, tentando login anônimo:", error);
+                    await signInAnonymously(auth);
+                }
+            } else {
+                await signInAnonymously(auth);
+            }
+
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('user-id').innerText = `ID do Usuário: ${userId}`;
+                    startDashboard();
+                } else {
+                    console.log("Nenhum usuário logado.");
+                }
+            });
+        });
+
+        async function startDashboard() {
+            const dataFiltro = document.getElementById('data-filtro');
+            const today = new Date().toISOString().substring(0, 10);
+            dataFiltro.value = today;
+
+            onSnapshot(collection(db, `artifacts/${appId}/users/${userId}/operacoes`), (snapshot) => {
+                fullDbData = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}));
+                lastUpdated = new Date().toLocaleString('pt-BR');
+                document.getElementById('last-updated').innerText = `Última atualização: ${lastUpdated}`;
+                renderDashboard();
+            });
+            
+            renderDataEntryForm();
+            
+            document.getElementById('add-data-btn').addEventListener('click', adicionarDados);
+            document.getElementById('export-excel-btn').addEventListener('click', exportToExcel);
+            document.getElementById('export-obs-excel-btn').addEventListener('click', exportObsToExcel);
+            document.getElementById('data-filtro').addEventListener('change', renderDashboard);
+            document.getElementById('gerar-resumo-btn').addEventListener('click', gerarAnaliseDiaria);
+            document.getElementById('image-upload-btn').addEventListener('click', () => document.getElementById('image-upload').click());
+            document.getElementById('image-upload').addEventListener('change', handleImageUpload);
+            document.getElementById('copy-analysis-btn').addEventListener('click', copyAnalysis);
+            document.getElementById('export-charts-btn').addEventListener('click', exportChartsToImage);
+            document.getElementById('export-table-btn').addEventListener('click', exportTableToImage);
+            document.getElementById('message-ok-btn').addEventListener('click', closeMessageModal);
+            
+            // New event listener for the "Ver Painel Completo" button
+            document.getElementById('show-full-dashboard-btn').addEventListener('click', showDashboardView);
+
+            // New event listener for the "Voltar" button
+            const backButtons = document.querySelectorAll('.back-to-splash-btn');
+            backButtons.forEach(btn => btn.addEventListener('click', showSplashPage));
+
+            document.getElementById('edit-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('edit-id').value;
+                const updatedData = {
+                    EQUIPAMENTO: document.getElementById('edit-equipamento').value,
+                    STATUS: document.getElementById('edit-status').value,
+                    MOTORISTA: document.getElementById('edit-motorista').value,
+                    NOME1: document.getElementById('edit-nome1').value,
+                    NOME2: document.getElementById('edit-nome2').value,
+                    OBSERVACAO: document.getElementById('edit-observacao').value
+                };
+
+                try {
+                    await updateDoc(doc(db, `artifacts/${appId}/users/${userId}/operacoes`, id), updatedData);
+                    closeEditModal();
+                    showMessageModal("Registro atualizado com sucesso!", true);
+                } catch (e) {
+                    console.error("Erro ao atualizar documento:", e);
+                    showMessageModal("Erro ao atualizar registro. Verifique o console.", false);
+                }
+            });
+        }
+        
+        function renderDataEntryForm() {
+            const tableBody = document.getElementById('form-table-body');
+            if (!tableBody) return;
+            tableBody.innerHTML = '';
+            
+            tagsUnicas.forEach(tag => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="py-2 px-4 border-b border-gray-200 bg-gray-100">${tag}</td>
+                    <td class="py-2 px-4 border-b border-gray-200"><input type="text" class="w-full p-1 rounded-md border-gray-300 shadow-sm" data-field="equipamento"></td>
+                    <td class="py-2 px-4 border-b border-gray-200">
+                        <select class="w-full p-1 rounded-md border-gray-300 shadow-sm" data-field="status">
+                            <option value="">Selecione o status</option>
+                            <option value="Em operação">Em operação</option>
+                            <option value="Em reparo">Em reparo</option>
+                            <option value="SEM EFETIVO">Sem efetivo</option>
+                            <option value="TURNO 1">Turno 1</option>
+                            <option value="Reparo Mecanico/Sem efetivo">Reparo Mecanico/Sem efetivo</option>
+                            <option value="Reparo Mecanico">Reparo Mecanico</option>
+                        </select>
+                    </td>
+                    <td class="py-2 px-4 border-b border-gray-200"><input type="text" list="nomes-list" class="w-full p-1 rounded-md border-gray-300 shadow-sm" data-field="motorista"></td>
+                    <td class="py-2 px-4 border-b border-gray-200"><input type="text" list="nomes-list" class="w-full p-1 rounded-md border-gray-300 shadow-sm" data-field="nome1"></td>
+                    <td class="py-2 px-4 border-b border-gray-200"><input type="text" list="nomes-list" class="w-full p-1 rounded-md border-gray-300 shadow-sm" data-field="nome2"></td>
+                    <td class="py-2 px-4 border-b border-gray-200"><input type="text" class="w-full p-1 rounded-md border-gray-300 shadow-sm" data-field="observacao"></td>
+                `;
+                tableBody.appendChild(row);
+            });
+            const datalist = document.createElement('datalist');
+            datalist.id = 'nomes-list';
+            datalist.innerHTML = nomesColaboradores.map(nome => `<option value="${nome}">`).join('');
+            document.body.appendChild(datalist);
+        }
+
+        async function adicionarDados() {
+            const dataInput = document.getElementById('new-data-date').value;
+            const tableBody = document.getElementById('form-table-body');
+            const rows = tableBody.querySelectorAll('tr');
+
+            if (!dataInput) {
+                showMessageModal("Por favor, preencha a data.", false);
+                return;
+            }
+
+            const batch = [];
+            rows.forEach(row => {
+                const tag = row.cells[0].innerText;
+                const equipamento = row.querySelector('[data-field="equipamento"]').value;
+                const status = row.querySelector('[data-field="status"]').value;
+                const motorista = row.querySelector('[data-field="motorista"]').value;
+                const nome1 = row.querySelector('[data-field="nome1"]').value;
+                const nome2 = row.querySelector('[data-field="nome2"]').value;
+                const observacao = row.querySelector('[data-field="observacao"]').value;
+
+                if (equipamento && status) {
+                    const newData = {
+                        DATA: dataInput.split('-').reverse().join('/'),
+                        TAG: tag,
+                        EQUIPAMENTO: equipamento,
+                        STATUS: status,
+                        MOTORISTA: motorista,
+                        NOME1: nome1,
+                        NOME2: nome2,
+                        OBSERVACAO: observacao
+                    };
+                    batch.push(addDoc(collection(db, `artifacts/${appId}/users/${userId}/operacoes`), newData));
+                }
+            });
+
+            if (batch.length === 0) {
+                showMessageModal("Nenhum registro válido para adicionar.", false);
+                return;
+            }
+
+            try {
+                await Promise.all(batch);
+                showMessageModal("Dados adicionados com sucesso!", true);
+                document.getElementById('new-data-date').value = '';
+                renderDataEntryForm();
+            } catch (e) {
+                console.error("Erro ao adicionar documentos: ", e);
+                showMessageModal("Erro ao adicionar dados. Verifique o console para mais detalhes.", false);
+            }
+        }
+        
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const button = document.getElementById('image-upload-btn');
+            button.disabled = true;
+            const originalContent = button.innerHTML;
+            button.innerHTML = '<span class="loading-spinner h-5 w-5 mr-2"></span> Processando...';
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const base64Data = e.target.result.split(',')[1];
+                const userQuery = `
+                    Extraia os dados da tabela na imagem e os retorne em formato JSON. Cada objeto no array JSON deve ter as chaves 'TAG', 'EQUIPAMENTO', 'STATUS', 'MOTORISTA', 'NOME1', 'NOME2', 'OBSERVACAO'. Retorne apenas o JSON, sem texto explicativo. Se não houver dados válidos, retorne um array vazio.
+                `;
+
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: userQuery },
+                            { inlineData: { mimeType: file.type, data: base64Data } }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    "TAG": { "type": "STRING" },
+                                    "EQUIPAMENTO": { "type": "STRING" },
+                                    "STATUS": { "type": "STRING" },
+                                    "MOTORISTA": { "type": "STRING" },
+                                    "NOME1": { "type": "STRING" },
+                                    "NOME2": { "type": "STRING" },
+                                    "OBSERVACAO": { "type": "STRING" },
+                                },
+                                "propertyOrdering": ["TAG", "EQUIPAMENTO", "STATUS", "MOTORISTA", "NOME1", "NOME2", "OBSERVACAO"]
+                            }
+                        }
+                    }
+                };
+
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const result = await response.json();
+                    const jsonContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const parsedData = JSON.parse(jsonContent);
+
+                    populateFormWithData(parsedData);
+                    showMessageModal("Dados extraídos da imagem com sucesso! Por favor, revise e salve.", true);
+
+                } catch (error) {
+                    console.error('Erro ao processar imagem:', error);
+                    showMessageModal("Erro ao extrair dados da imagem. Por favor, tente novamente.", false);
+                } finally {
+                    button.disabled = false;
+                    button.innerHTML = originalContent;
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function populateFormWithData(data) {
+            const tableBody = document.getElementById('form-table-body');
+            const rows = tableBody.querySelectorAll('tr');
+
+            data.forEach((item, index) => {
+                if (index < rows.length) {
+                    const row = rows[index];
+                    const tag = row.cells[0].innerText;
+                    if (item.TAG === tag) {
+                        row.querySelector('[data-field="equipamento"]').value = item.EQUIPAMENTO || '';
+                        row.querySelector('[data-field="status"]').value = item.STATUS || '';
+                        row.querySelector('[data-field="motorista"]').value = item.MOTORISTA || '';
+                        row.querySelector('[data-field="nome1"]').value = item.NOME1 || '';
+                        row.querySelector('[data-field="nome2"]').value = item.NOME2 || '';
+                        row.querySelector('[data-field="observacao"]').value = item.OBSERVACAO || '';
+                    }
+                }
+            });
+        }
+        
+        function renderDashboard() {
+            const selectedDate = document.getElementById('data-filtro').value.split('-').reverse().join('/');
+            const filteredData = fullDbData.filter(item => item.DATA === selectedDate);
+            
+            updateMetrics(filteredData, fullDbData);
+            updateTables(filteredData.sort((a, b) => a.TAG.localeCompare(b.TAG)));
+            updateCharts(filteredData);
+        }
+
+        function filterByStatus(status) {
+            const selectedDate = document.getElementById('data-filtro').value.split('-').reverse().join('/');
+            const dateFilteredData = fullDbData.filter(item => item.DATA === selectedDate);
+            let filteredData;
+            
+            if (status === 'Programados') {
+                filteredData = dateFilteredData.filter(item => item.TAG && item.TAG.trim() !== '');
+            } else if (status === 'Reparo') {
+                filteredData = dateFilteredData.filter(item => item.STATUS && (item.STATUS.includes('Reparo') || item.STATUS.includes('reparo')));
+            } else if (status === 'Em operação') {
+                filteredData = dateFilteredData.filter(item => item.STATUS && item.STATUS.includes('Em operação'));
+            } else {
+                filteredData = dateFilteredData.filter(item => item.STATUS === status);
+            }
+            
+            updateTables(filteredData.sort((a, b) => a.TAG.localeCompare(b.TAG)));
+        }
+        window.filterByStatus = filterByStatus;
+
+        function showStatusModal(status) {
+            const selectedDate = document.getElementById('data-filtro').value.split('-').reverse().join('/');
+            const dateFilteredData = fullDbData.filter(item => item.DATA === selectedDate);
+            let filteredData;
+
+            let title;
+            if (status === 'Programados') {
+                filteredData = dateFilteredData.filter(item => item.TAG && item.TAG.trim() !== '');
+                title = 'Equipamentos Programados';
+            } else if (status === 'Reparo') {
+                filteredData = dateFilteredData.filter(item => item.STATUS && (item.STATUS.includes('Reparo') || item.STATUS.includes('reparo')));
+                title = 'Equipamentos em Reparo';
+            } else if (status === 'Em operação') {
+                filteredData = dateFilteredData.filter(item => item.STATUS && item.STATUS.includes('Em operação'));
+                title = 'Equipamentos em Operação';
+            } else if (status === 'SEM EFETIVO') {
+                filteredData = dateFilteredData.filter(item => item.STATUS && (item.STATUS.includes('SEM EFETIVO') || item.STATUS.includes('Sem efetivo')));
+                title = 'Equipamentos Sem Efetivo';
+            } else {
+                title = 'Detalhes';
+                filteredData = dateFilteredData;
+            }
+
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+
+            modalTitle.innerText = title;
+            modalContent.innerHTML = '';
+
+            if (filteredData.length > 0) {
+                const list = document.createElement('ul');
+                list.classList.add('space-y-2');
+                filteredData.forEach(item => {
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <span class="font-semibold text-gray-800">TAG:</span> ${item.TAG || 'N/A'} - 
+                        <span class="font-semibold text-gray-800">Equipamento:</span> ${item.EQUIPAMENTO || 'N/A'}
+                    `;
+                    list.appendChild(listItem);
+                });
+                modalContent.appendChild(list);
+            } else {
+                modalContent.innerHTML = '<p class="text-gray-500">Nenhum equipamento encontrado com este status na data selecionada.</p>';
+            }
+
+            document.getElementById('status-modal').classList.remove('hidden');
+        }
+        window.showStatusModal = showStatusModal;
+
+
+        function clearFilter() {
+            renderDashboard();
+        }
+        window.clearFilter = clearFilter;
+        
+        function closeModal() {
+            document.getElementById('status-modal').classList.add('hidden');
+        }
+        window.closeModal = closeModal;
+        window.closeEditModal = () => {
+             document.getElementById('edit-modal').classList.add('hidden');
+        }
+        window.closeLoginModal = () => {
+            document.getElementById('login-modal').classList.add('hidden');
+        }
+        
+        function showMessageModal(message, isSuccess) {
+            const modal = document.getElementById('message-modal');
+            const icon = document.getElementById('message-icon');
+            const text = document.getElementById('message-text');
+
+            icon.innerHTML = isSuccess
+                ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`
+                : `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+            text.innerText = message;
+            modal.classList.remove('hidden');
+        }
+
+        function closeMessageModal() {
+            document.getElementById('message-modal').classList.add('hidden');
+        }
+        
+        function showConfirmModal(id) {
+            entryToDeleteId = id;
+            document.getElementById('confirmation-modal').classList.remove('hidden');
+        }
+        
+        function closeConfirmModal() {
+            entryToDeleteId = null;
+            document.getElementById('confirmation-modal').classList.add('hidden');
+        }
+        
+        async function handleDeleteConfirm() {
+            if (entryToDeleteId) {
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/operacoes`, entryToDeleteId));
+                    showMessageModal("Registro deletado com sucesso!", true);
+                } catch (e) {
+                    console.error("Erro ao deletar documento: ", e);
+                    showMessageModal("Erro ao deletar registro. Verifique o console.", false);
+                } finally {
+                    closeConfirmModal();
+                }
+            }
+        }
+
+        function updateMetrics(filteredData, allData) {
+            const uniqueEquipamentos = [...new Set(allData.map(item => item.EQUIPAMENTO).filter(e => e && e.trim() !== ''))];
+            const totalEquipamentos = uniqueEquipamentos.length;
+            
+            const emOperacao = filteredData.filter(item => item.STATUS && item.STATUS.includes('Em operação')).length;
+            const emReparo = filteredData.filter(item => item.STATUS && (item.STATUS.includes('Reparo') || item.STATUS.includes('reparo'))).length;
+            const semEfetivo = filteredData.filter(item => item.STATUS && (item.STATUS.includes('SEM EFETIVO') || item.STATUS.includes('Sem efetivo'))).length;
+            const programados = tagsUnicas.length;
+
+            document.getElementById('total-equipamentos').innerText = totalEquipamentos;
+            document.getElementById('em-operacao').innerText = emOperacao;
+            document.getElementById('em-reparo').innerText = emReparo;
+            document.getElementById('sem-efetivo').innerText = semEfetivo;
+            document.getElementById('total-programados').innerText = tagsUnicas.length;
+
+            document.getElementById('em-operacao-percent').innerText = `${((emOperacao / programados) * 100).toFixed(2)}% do programado`;
+            document.getElementById('em-reparo-percent').innerText = `${((emReparo / programados) * 100).toFixed(2)}% do programado`;
+            document.getElementById('sem-efetivo-percent').innerText = `${((semEfetivo / programados) * 100).toFixed(2)}% do programado`;
+            document.getElementById('programados-percent').innerText = `${((programados / totalEquipamentos) * 100).toFixed(2)}% do total`;
+        }
+
+        async function updateTables(data) {
+            const detalhesTabela = document.getElementById('detalhes-tabela');
+            const observacoesTabela = document.getElementById('observacoes-tabela');
+            const noObsMessage = document.getElementById('no-obs-message');
+
+            detalhesTabela.innerHTML = '';
+            observacoesTabela.innerHTML = '';
+
+            const observacoesData = data.filter(item => item.OBSERVACAO && item.OBSERVACAO.trim() !== '');
+
+            const formatText = (text) => text && text.trim() !== '' ? text.replace(/\n/g, '<br>') : '';
+            const formatName = (name) => {
+                if (!name || name.trim() === '') return '';
+                const parts = name.split(' ');
+                if (parts.length > 2) {
+                    return `${parts[0]} ${parts[1]}`;
+                }
+                return name;
+            };
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                row.classList.add('border-b', 'border-gray-200', 'hover:bg-gray-50');
+                
+                let statusColor = '';
+                if (item.STATUS && item.STATUS.includes('Em operação')) {
+                    statusColor = 'bg-green-200 text-green-600';
+                } else if (item.STATUS && (item.STATUS.includes('Reparo') || item.STATUS.includes('reparo'))) {
+                    statusColor = 'bg-red-200 text-red-600';
+                } else if (item.STATUS && (item.STATUS.includes('SEM EFETIVO') || item.STATUS.includes('Sem efetivo'))) {
+                    statusColor = 'bg-yellow-200 text-yellow-600';
+                } else if (item.STATUS && item.STATUS.includes('TURNO')) {
+                    statusColor = 'bg-blue-200 text-blue-600';
+                } else {
+                    statusColor = 'bg-gray-200 text-gray-600';
+                }
+                
+                row.innerHTML = `
+                    <td class="py-3 px-6 text-left whitespace-nowrap">${formatText(item.DATA)}</td>
+                    <td class="py-3 px-6 text-left">${formatText(item.EQUIPAMENTO)}</td>
+                    <td class="py-3 px-6 text-left">${formatText(item.TAG)}</td>
+                    <td class="py-3 px-6 text-left"><span class="status-badge ${statusColor}">${formatText(item.STATUS)}</span></td>
+                    <td class="py-3 px-6 text-left long-text">${formatName(item.MOTORISTA)}</td>
+                    <td class="py-3 px-6 text-left long-text">${formatName(item.NOME1)}</td>
+                    <td class="py-3 px-6 text-left long-text">${formatName(item.NOME2)}</td>
+                    <td class="py-3 px-6 text-right">
+                        ${(isLoggedIn) ? `
+                            <button onclick="editEntry('${item.id}')" class="text-indigo-600 hover:text-indigo-900 mx-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                </svg>
+                            </button>
+                            <button onclick="showConfirmModal('${item.id}')" class="text-red-600 hover:text-red-900 mx-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        ` : ''}
+                    </td>
+                `;
+                detalhesTabela.appendChild(row);
+            });
+
+            if (observacoesData.length > 0) {
+                noObsMessage.classList.add('hidden');
+                observacoesData.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.classList.add('border-b', 'border-gray-200', 'hover:bg-gray-50');
+                    row.innerHTML = `
+                        <td class="py-3 px-6 text-left whitespace-nowrap">${formatText(item.DATA)}</td>
+                        <td class="py-3 px-6 text-left">${formatText(item.EQUIPAMENTO)}</td>
+                        <td class="py-3 px-6 text-left">${formatText(item.TAG)}</td>
+                        <td class="py-3 px-6 text-left long-text">${formatText(item.OBSERVACAO)}</td>
+                    `;
+                    observacoesTabela.appendChild(row);
+                });
+            } else {
+                noObsMessage.classList.remove('hidden');
+            }
+        }
+        window.editEntry = (id) => {
+            const entry = fullDbData.find(item => item.id === id);
+            if (!entry) return;
+            
+            const form = document.getElementById('edit-form');
+            form.querySelector('#edit-id').value = id;
+            form.querySelector('#edit-tag').value = entry.TAG;
+            form.querySelector('#edit-equipamento').value = entry.EQUIPAMENTO;
+            form.querySelector('#edit-status').value = entry.STATUS;
+            form.querySelector('#edit-motorista').value = entry.MOTORISTA;
+            form.querySelector('#edit-nome1').value = entry.NOME1;
+            form.querySelector('#edit-nome2').value = entry.NOME2;
+            form.querySelector('#edit-observacao').value = entry.OBSERVACAO;
+            
+            document.getElementById('edit-modal').classList.remove('hidden');
+        };
+        window.showConfirmModal = showConfirmModal;
+
+        let statusChart, programadosTotalChart, programadosOperacaoChart;
+        function updateCharts(filteredData) {
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                scales: { y: { beginAtZero: true } }
+            };
+
+            const dadosStatus = {
+                'Em Operação': filteredData.filter(item => item.STATUS && item.STATUS.includes('Em operação')).length,
+                'Em Reparo': filteredData.filter(item => item.STATUS && (item.STATUS.includes('Reparo') || item.STATUS.includes('reparo'))).length,
+                'Sem Efetivo': filteredData.filter(item => item.STATUS && (item.STATUS.includes('SEM EFETIVO') || item.STATUS.includes('Sem efetivo'))).length,
+                'Outros': filteredData.length - filteredData.filter(item => item.STATUS && (item.STATUS.includes('Em operação') || item.STATUS.includes('Reparo') || item.STATUS.includes('reparo') || item.STATUS.includes('SEM EFETIVO') || item.STATUS.includes('Sem efetivo'))).length
+            };
+
+            const uniqueEquipamentos = [...new Set(fullDbData.map(item => item.EQUIPAMENTO).filter(e => e && e.trim() !== ''))];
+            const totalEquipamentos = uniqueEquipamentos.length;
+            const programados = tagsUnicas.length;
+            const emOperacaoTotal = filteredData.filter(item => item.STATUS && item.STATUS.includes('Em operação')).length;
+
+            const programadosOperacaoData = {
+                'Programados': programados,
+                'Em Operação': emOperacaoTotal
+            };
+
+            const programadosTotalData = {
+                'Programados': programados,
+                'Total': totalEquipamentos
+            };
+
+            if (statusChart) statusChart.destroy();
+            const ctxStatus = document.getElementById('statusChart').getContext('2d');
+            statusChart = new Chart(ctxStatus, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(dadosStatus),
+                    datasets: [{
+                        data: Object.values(dadosStatus),
+                        backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#6B7280'],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            if (programadosTotalChart) programadosTotalChart.destroy();
+            const ctxProgramadosTotal = document.getElementById('programadosTotalChart').getContext('2d');
+            programadosTotalChart = new Chart(ctxProgramadosTotal, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(programadosTotalData),
+                    datasets: [{
+                        label: 'Número de Equipamentos',
+                        data: Object.values(programadosTotalData),
+                        backgroundColor: ['#F59E0B', '#6B7280'],
+                        borderRadius: 8,
+                    }]
+                },
+                options: chartOptions
+            });
+
+            if (programadosOperacaoChart) programadosOperacaoChart.destroy();
+            const ctxProgramadosOperacao = document.getElementById('programadosOperacaoChart').getContext('2d');
+            programadosOperacaoChart = new Chart(ctxProgramadosOperacao, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(programadosOperacaoData),
+                    datasets: [{
+                        label: 'Número de Equipamentos',
+                        data: Object.values(programadosOperacaoData),
+                        backgroundColor: ['#F59E0B', '#10B981'],
+                        borderRadius: 8,
+                    }]
+                },
+                options: chartOptions
+            });
+        }
+        
+        async function gerarAnaliseDiaria() {
+            const selectedDate = document.getElementById('data-filtro').value;
+            const docs = await getDocs(query(collection(db, `artifacts/${appId}/users/${userId}/operacoes`), where('DATA', '==', selectedDate.split('-').reverse().join('/'))));
+            const filteredData = docs.docs.map(doc => doc.data());
+
+            const analiseSection = document.getElementById('analise-section');
+            const analiseContent = document.getElementById('analise-content');
+            const gerarResumoBtn = document.getElementById('gerar-resumo-btn');
+            const copyBtn = document.getElementById('copy-analysis-btn');
+
+            analiseSection.style.display = 'block';
+            analiseContent.innerHTML = '<div class="flex items-center space-x-2 text-gray-500"><div class="loading-spinner"></div><span>Gerando análise...</span></div>';
+            gerarResumoBtn.disabled = true;
+            copyBtn.disabled = true;
+
+            const textData = JSON.stringify(filteredData, null, 2);
+
+            const userQuery = `
+                Com base nos seguintes dados de operações mecanizadas para a data ${selectedDate}, gere um resumo profissional e conciso da situação geral da frota. Aponte os principais problemas (reparos, sem efetivo), as observações mais importantes e destaque os pontos positivos (equipamentos em operação).
+
+                Dados:
+                ${textData}
+            `;
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: userQuery }] }],
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro na API: ${response.status} ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                const generatedText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "Não foi possível gerar a análise. Tente novamente.";
+                
+                analiseContent.innerHTML = generatedText.replace(/\n/g, '<br>');
+
+            } catch (error) {
+                console.error('Erro ao chamar a Gemini API:', error);
+                analiseContent.innerHTML = `<span class="text-red-500">Erro ao gerar a análise. Por favor, tente novamente.</span>`;
+            } finally {
+                gerarResumoBtn.disabled = false;
+                copyBtn.disabled = false;
+            }
+        }
+
+        function copyAnalysis() {
+            const analysisContent = document.getElementById('analise-content');
+            const textToCopy = analysisContent.innerText;
+            if (textToCopy && textToCopy.length > 0) {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = textToCopy;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showMessageModal("Análise copiada para a área de transferência!", true);
+            } else {
+                showMessageModal("Não há análise para copiar.", false);
+            }
+        }
+        
+        // Função para gerar imagem de uma seção específica
+        async function captureAndDownload(elementId, fileName, buttonId) {
+            const button = document.getElementById(buttonId);
+            button.disabled = true;
+            const originalContent = button.innerHTML;
+            button.innerHTML = '<span class="loading-spinner h-5 w-5 mr-2"></span> Gerando...';
+            
+            try {
+                const element = document.getElementById(elementId);
+                const canvas = await html2canvas(element, { 
+                    scale: 2, 
+                    useCORS: true, 
+                    backgroundColor: '#F4F7F9' 
+                });
+
+                const link = document.createElement('a');
+                link.href = canvas.toDataURL('image/png');
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error('Erro ao gerar a imagem:', error);
+                showMessageModal('Ocorreu um erro ao gerar a imagem. Por favor, tente novamente.', false);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalContent;
+            }
+        }
+
+        // Nova função para exportar gráficos e cards
+        function exportChartsToImage() {
+            captureAndDownload('charts-and-cards-container', `relatorio_graficos_${document.getElementById('data-filtro').value}.png`, 'export-charts-btn');
+        }
+
+        // Nova função para exportar a tabela de detalhes
+        function exportTableToImage() {
+            captureAndDownload('details-table-container', `relatorio_tabela_${document.getElementById('data-filtro').value}.png`, 'export-table-btn');
+        }
+        
+        function exportToExcel() {
+            const table = document.getElementById('detalhes-tabela');
+            if (!table) return;
+
+            let csv = [];
+            const headers = table.closest('table').querySelectorAll('thead th');
+            const headerText = Array.from(headers).map(th => `"${th.innerText.replace(/"/g, '""')}"`).join(',');
+            csv.push(headerText);
+            
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+                const rowData = Array.from(row.querySelectorAll('td')).map(td => {
+                    const cellText = td.querySelector('.status-badge') ? td.querySelector('.status-badge').innerText : td.innerText;
+                    return `"${cellText.replace(/"/g, '""')}"`;
+                }).join(',');
+                csv.push(rowData);
+            });
+
+            const csvFile = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const downloadLink = document.createElement('a');
+            const url = URL.createObjectURL(csvFile);
+            downloadLink.href = url;
+            downloadLink.setAttribute('download', 'detalhes_equipamentos.csv');
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        function exportObsToExcel() {
+            const table = document.getElementById('observacoes-tabela');
+            if (!table) return;
+
+            let csv = [];
+            const headers = table.closest('table').querySelectorAll('thead th');
+            const headerText = Array.from(headers).map(th => `"${th.innerText.replace(/"/g, '""')}"`).join(',');
+            csv.push(headerText);
+            
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(row => {
+                const rowData = Array.from(row.querySelectorAll('td')).map(td => {
+                    const cellText = td.querySelector('.status-badge') ? td.querySelector('.status-badge').innerText : td.innerText;
+                    return `"${cellText.replace(/"/g, '""')}"`;
+                }).join(',');
+                csv.push(rowData);
+            });
+
+            const csvFile = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const downloadLink = document.createElement('a');
+            const url = URL.createObjectURL(csvFile);
+            downloadLink.href = url;
+            downloadLink.setAttribute('download', 'observacoes.csv');
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        function showSplashPage() {
+            document.getElementById('splash-page').classList.remove('hidden');
+            document.getElementById('dashboard-container').classList.add('hidden');
+            document.body.classList.remove('data-entry-bg');
+        }
+        window.showSplashPage = showSplashPage;
+
+        function showDashboardView() {
+            document.getElementById('splash-page').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('data-entry-container').classList.add('hidden');
+            document.getElementById('full-dashboard-view').classList.remove('hidden');
+            document.getElementById('dashboard-header-controls').classList.remove('hidden');
+            document.body.classList.remove('data-entry-bg');
+        }
+        window.showDashboardView = showDashboardView;
+
+        function showDataEntryView() {
+            document.getElementById('splash-page').classList.add('hidden');
+            document.getElementById('dashboard-container').classList.remove('hidden');
+            document.getElementById('full-dashboard-view').classList.add('hidden');
+            document.getElementById('data-entry-container').classList.remove('hidden');
+            document.getElementById('dashboard-header-controls').classList.add('hidden');
+            document.body.classList.add('data-entry-bg');
+        }
+        window.showDataEntryView = showDataEntryView;
+
+        function showLoginModal() {
+            document.getElementById('login-modal').classList.remove('hidden');
+        }
+        window.showLoginModal = showLoginModal;
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            if (username === 'lidiasilvaaa' && password === 'lidia123') {
+                isLoggedIn = true;
+                showDataEntryView();
+                document.getElementById('login-modal').classList.add('hidden');
+                showMessageModal("Login bem-sucedido! Seção de lançamento de dados liberada.", true);
+            } else {
+                showMessageModal("Login ou senha incorretos.", false);
+            }
+        }
+        window.handleLogin = handleLogin;
+    </script>
+    <!-- Splash Page -->
+    <div id="splash-page" class="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <div class="text-center p-8 bg-white rounded-2xl shadow-xl">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 mb-4 animate-fadeIn">Painel de Controle de Operações Mecanizadas</h1>
+            <p class="text-lg md:text-xl text-gray-600 mb-8 animate-fadeIn delay-100">Selecione uma opção para continuar.</p>
+            <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                <button onclick="showDashboardView()" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-8 rounded-full transition duration-300 shadow-lg transform hover:scale-105 animate-fadeIn delay-200">
+                    Visualizar o Painel
+                </button>
+                <button onclick="showLoginModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full transition duration-300 shadow-lg transform hover:scale-105 animate-fadeIn delay-300">
+                    Lançar Dados
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Dashboard -->
+    <div id="dashboard-container" class="max-w-7xl mx-auto py-8 px-4 hidden">
+        <header class="mb-8 flex justify-between items-center flex-wrap">
+            <div class="flex items-center space-x-4">
+                <button id="back-to-splash-btn" class="back-to-splash-btn text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z" />
+                    </svg>
+                </button>
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-800">Painel de Controle de Operações</h1>
+                    <p class="text-gray-600 mt-2">Visão geral e status dos equipamentos</p>
+                    <div id="user-id" class="mt-2 text-sm text-gray-500"></div>
+                    <div id="last-updated" class="text-sm font-medium text-gray-500 mt-2"></div>
+                </div>
+            </div>
+            <div class="flex space-x-4 mt-4 md:mt-0" id="dashboard-header-controls">
+                <button id="gerar-resumo-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="gerarAnaliseDiaria()">
+                    Gerar Resumo Diário ✨
+                </button>
+                <button id="export-charts-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
+                    </svg>
+                    Gerar Imagem dos Gráficos
+                </button>
+                <button id="export-table-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Gerar Imagem da Tabela
+                </button>
+            </div>
+        </header>
+        
+        <!-- Conteúdo da Seção de Lançamento de Dados -->
+        <div id="data-entry-container" class="hidden">
+            <div class="card p-6 mb-8 cursor-default">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Adicionar Novo Registro</h2>
+                <div class="mb-4">
+                    <label for="new-data-date" class="block text-sm font-medium text-gray-700">Data do Registro</label>
+                    <input type="date" id="new-data-date" class="mt-1 block w-48 rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div class="overflow-x-auto rounded-lg shadow-inner">
+                    <table class="min-w-full bg-white">
+                        <thead class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                            <tr>
+                                <th class="py-3 px-6 text-left">TAG</th>
+                                <th class="py-3 px-6 text-left">Equipamento</th>
+                                <th class="py-3 px-6 text-left">Status</th>
+                                <th class="py-3 px-6 text-left">Motorista</th>
+                                <th class="py-3 px-6 text-left">Nome 1</th>
+                                <th class="py-3 px-6 text-left">Nome 2</th>
+                                <th class="py-3 px-6 text-left">Observação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="form-table-body" class="text-gray-600 text-sm font-light">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button type="button" id="add-data-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">Salvar Registros</button>
+                    <input type="file" id="image-upload" accept="image/*" class="hidden">
+                    <button type="button" id="image-upload-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center ml-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Adicionar dados da imagem
+                    </button>
+                    <button type="button" id="show-full-dashboard-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center ml-4">
+                        Ver Painel Completo
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Tabela com dados lançados, visível apenas na tela de lançamento -->
+            <div id="details-table-container" class="card p-6 mb-8 cursor-default hover:transform-none">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Detalhes dos Equipamentos</h2>
+                <div class="flex justify-end mb-4 space-x-2">
+                    <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        Exportar para Excel
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg shadow-inner">
+                    <table class="min-w-full bg-white rounded-lg">
+                        <thead class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                            <tr>
+                                <th class="py-3 px-6 text-left">Data</th>
+                                <th class="py-3 px-6 text-left">Equipamento</th>
+                                <th class="py-3 px-6 text-left">TAG</th>
+                                <th class="py-3 px-6 text-left">Status</th>
+                                <th class="py-3 px-6 text-left">Motorista</th>
+                                <th class="py-3 px-6 text-left">Nome 1</th>
+                                <th class="py-3 px-6 text-left">Nome 2</th>
+                                <th class="py-3 px-6 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detalhes-tabela" class="text-gray-600 text-sm font-light">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card p-6 cursor-default hover:transform-none" id="observations-table-container">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Observações</h2>
+                <div class="flex justify-end mb-4">
+                    <button id="export-obs-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        Exportar Observações
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg shadow-inner">
+                    <table class="min-w-full bg-white rounded-lg">
+                        <thead class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                            <tr>
+                                <th class="py-3 px-6 text-left">Data</th>
+                                <th class="py-3 px-6 text-left">Equipamento</th>
+                                <th class="py-3 px-6 text-left">TAG</th>
+                                <th class="py-3 px-6 text-left">Observação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="observacoes-tabela" class="text-gray-600 text-sm font-light">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-obs-message" class="text-center text-gray-500 mt-4 hidden">Nenhuma observação registrada para a data selecionada.</div>
+            </div>
+        </div>
+
+        <!-- Conteúdo da Visualização Completa do Painel -->
+        <div id="full-dashboard-view">
+            <div class="mb-6 flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4" id="data-filter-controls">
+                <div>
+                    <label for="data-filtro" class="block text-sm font-medium text-gray-700">Filtrar por Data:</label>
+                    <input type="date" id="data-filtro" class="mt-1 block w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                </div>
+                <button onclick="clearFilter()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">
+                    Limpar Filtro
+                </button>
+            </div>
+            
+            <div id="charts-and-cards-container">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="card p-6 flex items-center space-x-4 bg-gray-100 border-l-4 border-gray-500 cursor-default hover:transform-none">
+                        <div class="p-3 bg-gray-500 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 20.7L4 17.5v-5l6-3.2L16 9.5v5L10 20.7z"></path><path d="M22 17.5l-6 3.2-6-3.2L16 9.5l6 3.2v5z"></path></svg>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 font-semibold">Total de Equipamentos</div>
+                            <div id="total-equipamentos" class="text-3xl font-bold text-gray-800">0</div>
+                        </div>
+                    </div>
+
+                    <div class="card p-6 flex items-center space-x-4 bg-green-100 border-l-4 border-green-500" onclick="showStatusModal('Em operação')">
+                        <div class="p-3 bg-green-500 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-8.87"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 font-semibold">Em Operação</div>
+                            <div id="em-operacao" class="text-3xl font-bold text-gray-800">0</div>
+                            <div id="em-operacao-percent" class="text-sm font-semibold text-green-600 mt-1">0% do programado</div>
+                        </div>
+                    </div>
+
+                    <div class="card p-6 flex items-center space-x-4 bg-red-100 border-l-4 border-red-500" onclick="showStatusModal('Reparo')">
+                        <div class="p-3 bg-red-500 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 font-semibold">Em Reparo</div>
+                            <div id="em-reparo" class="text-3xl font-bold text-gray-800">0</div>
+                            <div id="em-reparo-percent" class="text-sm font-semibold text-red-600 mt-1">0% do programado</div>
+                        </div>
+                    </div>
+
+                    <div class="card p-6 flex items-center space-x-4 bg-yellow-100 border-l-4 border-yellow-500" onclick="showStatusModal('SEM EFETIVO')">
+                        <div class="p-3 bg-yellow-500 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                        </div>
+                        <div>
+                            <div class="text-gray-500 font-semibold">Sem Efetivo</div>
+                            <div id="sem-efetivo" class="text-3xl font-bold text-gray-800">0</div>
+                            <div id="sem-efetivo-percent" class="text-sm font-semibold text-yellow-600 mt-1">0% do programado</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card p-6 flex items-center space-x-4 bg-purple-100 border-l-4 border-purple-500" onclick="showStatusModal('Programados')">
+                        <div class="p-3 bg-purple-500 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                        </div>
+                        <div>
+                            <div id="total-programados-text" class="text-gray-500 font-semibold">Total de Programados</div>
+                            <div id="total-programados" class="text-3xl font-bold text-gray-800">0</div>
+                            <div id="programados-percent" class="text-sm font-semibold text-purple-600 mt-1">0% do total</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card p-6 mb-8 cursor-default hover:transform-none" id="analise-section" style="display: none;">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Análise do Dia</h2>
+                    <div id="analise-content" class="text-gray-700 leading-relaxed">
+                        </div>
+                    <div class="flex justify-end mt-4">
+                        <button id="copy-analysis-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Copiar Análise
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="card p-6 cursor-default hover:transform-none">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Status dos Equipamentos</h2>
+                        <div class="chart-container">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card p-6 cursor-default hover:transform-none">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Programados VS Equipamentos</h2>
+                        <div class="chart-container">
+                            <canvas id="programadosTotalChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card p-6 cursor-default hover:transform-none">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Programados VS Em Operação</h2>
+                        <div class="chart-container">
+                            <canvas id="programadosOperacaoChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-6 mb-8 cursor-default hover:transform-none" id="details-table-container">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Detalhes dos Equipamentos</h2>
+                <div class="flex justify-end mb-4 space-x-2">
+                    <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        Exportar para Excel
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg shadow-inner">
+                    <table class="min-w-full bg-white rounded-lg">
+                        <thead class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                            <tr>
+                                <th class="py-3 px-6 text-left">Data</th>
+                                <th class="py-3 px-6 text-left">Equipamento</th>
+                                <th class="py-3 px-6 text-left">TAG</th>
+                                <th class="py-3 px-6 text-left">Status</th>
+                                <th class="py-3 px-6 text-left">Motorista</th>
+                                <th class="py-3 px-6 text-left">Nome 1</th>
+                                <th class="py-3 px-6 text-left">Nome 2</th>
+                                <th class="py-3 px-6 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detalhes-tabela" class="text-gray-600 text-sm font-light">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card p-6 cursor-default hover:transform-none" id="observations-table-container">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Observações</h2>
+                <div class="flex justify-end mb-4">
+                    <button id="export-obs-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
+                        </svg>
+                        Exportar Observações
+                    </button>
+                </div>
+                <div class="overflow-x-auto rounded-lg shadow-inner">
+                    <table class="min-w-full bg-white rounded-lg">
+                        <thead class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                            <tr>
+                                <th class="py-3 px-6 text-left">Data</th>
+                                <th class="py-3 px-6 text-left">Equipamento</th>
+                                <th class="py-3 px-6 text-left">TAG</th>
+                                <th class="py-3 px-6 text-left">Observação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="observacoes-tabela" class="text-gray-600 text-sm font-light">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-obs-message" class="text-center text-gray-500 mt-4 hidden">Nenhuma observação registrada para a data selecionada.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Detalhes de Status -->
+    <div id="status-modal" class="modal hidden" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-2xl font-bold text-gray-800"></h3>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-content" class="text-gray-700">
+                </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição -->
+    <div id="edit-modal" class="modal hidden" onclick="closeEditModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-800">Editar Registro</h3>
+                <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="edit-form" class="space-y-4">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label for="edit-tag" class="block text-sm font-medium text-gray-700">TAG</label>
+                    <input type="text" id="edit-tag" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" readonly>
+                </div>
+                <div>
+                    <label for="edit-equipamento" class="block text-sm font-medium text-gray-700">Equipamento</label>
+                    <input type="text" id="edit-equipamento" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="edit-status" class="block text-sm font-medium text-gray-700">Status</label>
+                    <select id="edit-status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <option value="Em operação">Em operação</option>
+                        <option value="Em reparo">Em reparo</option>
+                        <option value="SEM EFETIVO">Sem efetivo</option>
+                        <option value="TURNO 1">Turno 1</option>
+                        <option value="Reparo Mecanico/Sem efetivo">Reparo Mecanico/Sem efetivo</option>
+                        <option value="Reparo Mecanico">Reparo Mecanico</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="edit-motorista" class="block text-sm font-medium text-gray-700">Motorista</label>
+                    <input type="text" id="edit-motorista" list="nomes-list" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="edit-nome1" class="block text-sm font-medium text-gray-700">Nome 1</label>
+                    <input type="text" id="edit-nome1" list="nomes-list" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="edit-nome2" class="block text-sm font-medium text-gray-700">Nome 2</label>
+                    <input type="text" id="edit-nome2" list="nomes-list" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                </div>
+                <div>
+                    <label for="edit-observacao" class="block text-sm font-medium text-gray-700">Observação</label>
+                    <textarea id="edit-observacao" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" onclick="closeEditModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">Cancelar</button>
+                    <button type="submit" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal de Confirmação -->
+    <div id="confirmation-modal" class="modal hidden" onclick="closeConfirmModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="flex flex-col items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-red-500 mb-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v4a1 1 0 102 0V9a1 1 0 00-2 0z" clip-rule="evenodd" /></svg>
+                <h3 class="text-2xl font-bold text-gray-800 text-center">Tem certeza que deseja deletar este registro?</h3>
+                <div class="mt-6 flex justify-center space-x-4">
+                    <button onclick="handleDeleteConfirm()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300">Sim</button>
+                    <button onclick="closeConfirmModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-300">Não</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Mensagem (Toast) -->
+    <div id="message-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="flex items-center space-x-4">
+                <div id="message-icon"></div>
+                <div id="message-text" class="text-lg font-medium"></div>
+            </div>
+            <div class="mt-6 flex justify-center">
+                <button id="message-ok-btn" onclick="closeMessageModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Login -->
+    <div id="login-modal" class="modal hidden" onclick="closeLoginModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-800">Login</h3>
+                <button onclick="closeLoginModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label for="login-username" class="block text-sm font-medium text-gray-700">Usuário</label>
+                    <input type="text" id="login-username" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" required>
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-700">Senha</label>
+                    <input type="password" id="login-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" required>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">Entrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</body>
+</html>
