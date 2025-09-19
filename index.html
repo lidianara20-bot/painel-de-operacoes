@@ -5,7 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Controle de Operações Mecanizadas</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-in-down': 'slideInDown 0.5s ease-in-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideInDown: {
+                            '0%': { transform: 'translateY(-20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                    },
+                    backgroundImage: {
+                        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+                        'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+                        'gradient-blue-purple': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    },
+                }
+            }
+        }
+    </script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
         .loading-spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
             width: 36px;
@@ -20,20 +49,21 @@
             100% { transform: rotate(360deg); }
         }
         .card {
-            background-color: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(5px);
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1-px rgba(0, 0, 0, 0.06);
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border-radius: 16px;
+            box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.08);
             border: 1px solid #e5e7eb;
             overflow: hidden;
-            cursor: pointer;
-            transition: transform 0.2s ease-in-out;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .card:hover {
-            transform: translateY(-5px);
+        .card:hover:not(.cursor-default) {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.15), 0 6px 12px -3px rgba(0, 0, 0, 0.1);
         }
         .card.cursor-default:hover {
             transform: none;
+            box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.08);
         }
         body {
             font-family: 'Inter', sans-serif;
@@ -52,12 +82,12 @@
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
-            opacity: 0.15;
+            opacity: 0.1;
             z-index: -1;
         }
         
         .data-entry-bg {
-            background-color: #EBF8FF; /* Um azul mais claro para a seção de lançamento de dados */
+            background-color: #EBF8FF;
         }
 
         .status-badge {
@@ -84,6 +114,13 @@
             justify-content: center;
             align-items: center;
             z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
         }
         .modal-content {
             background-color: white;
@@ -94,6 +131,11 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
             position: relative;
             animation: fadeIn 0.3s ease-out;
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .modal.active .modal-content {
+            transform: scale(1);
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: scale(0.9); }
@@ -102,6 +144,16 @@
         .long-text {
             word-break: break-word;
             white-space: normal;
+        }
+        .btn-gradient {
+            background-image: linear-gradient(to right, #6A11CB 0%, #2575FC 100%);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px 0 rgba(100, 100, 255, 0.75);
+            border: none;
+        }
+        .btn-gradient:hover {
+            background-position: right center;
+            box-shadow: 0 4px 20px 0 rgba(100, 100, 255, 0.9);
         }
     </style>
     <script type="module">
@@ -175,6 +227,10 @@
                     console.log("Nenhum usuário logado.");
                 }
             });
+            
+            document.getElementById('view-dashboard-btn').addEventListener('click', showDashboardView);
+            document.getElementById('launch-data-btn').addEventListener('click', showLoginModal);
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
         });
 
         async function startDashboard() {
@@ -233,30 +289,31 @@
             if(backToSplashBtn) backToSplashBtn.addEventListener('click', showSplashPage);
             const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
             if(backToDashboardBtn) backToDashboardBtn.addEventListener('click', showDashboardView);
-            const showFullDashboardBtn = document.getElementById('show-full-dashboard-btn');
-            if(showFullDashboardBtn) showFullDashboardBtn.addEventListener('click', showDashboardView);
 
-            document.getElementById('edit-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const id = document.getElementById('edit-id').value;
-                const updatedData = {
-                    EQUIPAMENTO: document.getElementById('edit-equipamento').value,
-                    STATUS: document.getElementById('edit-status').value,
-                    MOTORISTA: document.getElementById('edit-motorista').value,
-                    NOME1: document.getElementById('edit-nome1').value,
-                    NOME2: document.getElementById('edit-nome2').value,
-                    OBSERVACAO: document.getElementById('edit-observacao').value
-                };
+            const editForm = document.getElementById('edit-form');
+            if(editForm) {
+                editForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const id = document.getElementById('edit-id').value;
+                    const updatedData = {
+                        EQUIPAMENTO: document.getElementById('edit-equipamento').value,
+                        STATUS: document.getElementById('edit-status').value,
+                        MOTORISTA: document.getElementById('edit-motorista').value,
+                        NOME1: document.getElementById('edit-nome1').value,
+                        NOME2: document.getElementById('edit-nome2').value,
+                        OBSERVACAO: document.getElementById('edit-observacao').value
+                    };
 
-                try {
-                    await updateDoc(doc(db, `artifacts/${appId}/users/${userId}/operacoes`, id), updatedData);
-                    closeEditModal();
-                    showMessageModal("Registro atualizado com sucesso!", true);
-                } catch (e) {
-                    console.error("Erro ao atualizar documento:", e);
-                    showMessageModal("Erro ao atualizar registro. Verifique o console.", false);
-                }
-            });
+                    try {
+                        await updateDoc(doc(db, `artifacts/${appId}/users/${userId}/operacoes`, id), updatedData);
+                        closeEditModal();
+                        showMessageModal("Registro atualizado com sucesso!", true);
+                    } catch (e) {
+                        console.error("Erro ao atualizar documento:", e);
+                        showMessageModal("Erro ao atualizar registro. Verifique o console.", false);
+                    }
+                });
+            }
         }
         
         function renderDataEntryForm() {
@@ -734,7 +791,7 @@
             form.querySelector('#edit-nome2').value = entry.NOME2;
             form.querySelector('#edit-observacao').value = entry.OBSERVACAO;
             
-            document.getElementById('edit-modal').classList.remove('hidden');
+            document.getElementById('edit-modal').classList.add('active');
         };
         window.showConfirmModal = showConfirmModal;
 
@@ -1098,10 +1155,10 @@
             <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 mb-4 animate-fadeIn">Painel de Controle de Operações Mecanizadas</h1>
             <p class="text-lg md:text-xl text-gray-600 mb-8 animate-fadeIn delay-100">Selecione uma opção para continuar.</p>
             <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                <button onclick="showDashboardView()" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-8 rounded-full transition duration-300 shadow-lg transform hover:scale-105 animate-fadeIn delay-200">
+                <button id="view-dashboard-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-8 rounded-full transition duration-300 shadow-lg transform hover:scale-105 animate-fadeIn delay-200">
                     Visualizar o Painel
                 </button>
-                <button onclick="showLoginModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full transition duration-300 shadow-lg transform hover:scale-105 animate-fadeIn delay-300">
+                <button id="launch-data-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full transition duration-300 shadow-lg transform hover:scale-105 animate-fadeIn delay-300">
                     Lançar Dados
                 </button>
             </div>
@@ -1112,7 +1169,7 @@
     <div id="dashboard-container" class="max-w-7xl mx-auto py-8 px-4 hidden">
         <header class="mb-8 flex justify-between items-center flex-wrap">
             <div class="flex items-center space-x-4">
-                <button id="back-to-splash-btn" class="back-to-splash-btn text-gray-500 hover:text-gray-700">
+                <button id="back-to-splash-btn" class="text-gray-500 hover:text-gray-700">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z" />
                     </svg>
@@ -1125,16 +1182,16 @@
                 </div>
             </div>
             <div class="flex space-x-4 mt-4 md:mt-0" id="dashboard-header-controls">
-                <button id="gerar-resumo-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="gerarAnaliseDiaria()">
+                <button id="gerar-resumo-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
                     Gerar Resumo Diário ✨
                 </button>
-                <button id="export-charts-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="exportChartsToImage()">
+                <button id="export-charts-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" />
                     </svg>
                     Gerar Imagem dos Gráficos
                 </button>
-                <button id="export-table-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="exportTableToImage()">
+                <button id="export-table-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
@@ -1149,7 +1206,7 @@
                     <label for="data-filtro" class="block text-sm font-medium text-gray-700">Filtrar por Data:</label>
                     <input type="date" id="data-filtro" class="mt-1 block w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
                 </div>
-                <button onclick="clearFilter()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">
+                <button id="clear-filter-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">
                     Limpar Filtro
                 </button>
             </div>
@@ -1166,7 +1223,7 @@
                         </div>
                     </div>
 
-                    <div class="card p-6 flex items-center space-x-4 bg-green-100 border-l-4 border-green-500" onclick="showStatusModal('Em operação')">
+                    <div id="em-operacao-card" class="card p-6 flex items-center space-x-4 bg-green-100 border-l-4 border-green-500">
                         <div class="p-3 bg-green-500 rounded-full">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-8.87"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                         </div>
@@ -1177,7 +1234,7 @@
                         </div>
                     </div>
 
-                    <div class="card p-6 flex items-center space-x-4 bg-red-100 border-l-4 border-red-500" onclick="showStatusModal('Reparo')">
+                    <div id="em-reparo-card" class="card p-6 flex items-center space-x-4 bg-red-100 border-l-4 border-red-500">
                         <div class="p-3 bg-red-500 rounded-full">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                         </div>
@@ -1188,7 +1245,7 @@
                         </div>
                     </div>
 
-                    <div class="card p-6 flex items-center space-x-4 bg-yellow-100 border-l-4 border-yellow-500" onclick="showStatusModal('SEM EFETIVO')">
+                    <div id="sem-efetivo-card" class="card p-6 flex items-center space-x-4 bg-yellow-100 border-l-4 border-yellow-500">
                         <div class="p-3 bg-yellow-500 rounded-full">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                         </div>
@@ -1199,7 +1256,7 @@
                         </div>
                     </div>
                     
-                    <div class="card p-6 flex items-center space-x-4 bg-purple-100 border-l-4 border-purple-500" onclick="showStatusModal('Programados')">
+                    <div id="programados-card" class="card p-6 flex items-center space-x-4 bg-purple-100 border-l-4 border-purple-500">
                         <div class="p-3 bg-purple-500 rounded-full">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
                         </div>
@@ -1216,7 +1273,7 @@
                     <div id="analise-content" class="text-gray-700 leading-relaxed">
                         </div>
                     <div class="flex justify-end mt-4">
-                        <button id="copy-analysis-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="copyAnalysis()">
+                        <button id="copy-analysis-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
@@ -1250,7 +1307,7 @@
             <div id="details-table-container" class="card p-6 mb-8 cursor-default hover:transform-none">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Detalhes dos Equipamentos</h2>
                 <div class="flex justify-end mb-4 space-x-2">
-                    <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="exportToExcel()">
+                    <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
                         </svg>
@@ -1280,7 +1337,7 @@
             <div class="card p-6 cursor-default hover:transform-none">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Observações</h2>
                 <div class="flex justify-end mb-4">
-                    <button id="export-obs-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="exportObsToExcel()">
+                    <button id="export-obs-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
                         </svg>
@@ -1308,7 +1365,7 @@
         <!-- Conteúdo da Seção de Lançamento de Dados -->
         <div id="data-entry-container" class="hidden">
              <div class="flex justify-start mb-4">
-                <button id="back-to-dashboard-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="showDashboardView()">
+                <button id="back-to-dashboard-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
@@ -1339,9 +1396,9 @@
                     </table>
                 </div>
                 <div class="mt-4 flex justify-end">
-                    <button type="button" id="add-data-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">Salvar Registros</button>
+                    <button id="add-data-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">Salvar Registros</button>
                     <input type="file" id="image-upload" accept="image/*" class="hidden">
-                    <button type="button" id="image-upload-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center ml-4">
+                    <button id="image-upload-btn" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg flex items-center ml-4">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
@@ -1354,7 +1411,7 @@
             <div id="details-table-container-edit" class="card p-6 mb-8 cursor-default hover:transform-none">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Detalhes dos Equipamentos</h2>
                 <div class="flex justify-end mb-4 space-x-2">
-                    <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="exportToExcel()">
+                    <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
                         </svg>
@@ -1382,206 +1439,6 @@
             </div>
 
             <div class="card p-6 cursor-default hover:transform-none">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Observações</h2>
-                <div class="flex justify-end mb-4">
-                    <button id="export-obs-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center" onclick="exportObsToExcel()">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
-                        </svg>
-                        Exportar Observações
-                    </button>
-                </div>
-                <div class="overflow-x-auto rounded-lg shadow-inner">
-                    <table class="min-w-full bg-white rounded-lg">
-                        <thead class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                            <tr>
-                                <th class="py-3 px-6 text-left">Data</th>
-                                <th class="py-3 px-6 text-left">Equipamento</th>
-                                <th class="py-3 px-6 text-left">TAG</th>
-                                <th class="py-3 px-6 text-left">Observação</th>
-                            </tr>
-                        </thead>
-                        <tbody id="observacoes-tabela" class="text-gray-600 text-sm font-light">
-                        </tbody>
-                    </table>
-                </div>
-                <div id="no-obs-message" class="text-center text-gray-500 mt-4 hidden">Nenhuma observação registrada para a data selecionada.</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal para Detalhes de Status -->
-    <div id="status-modal" class="modal hidden" onclick="closeModal()">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="modal-title" class="text-2xl font-bold text-gray-800"></h3>
-                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <div id="modal-content" class="text-gray-700">
-                </div>
-        </div>
-    </div>
-
-    <!-- Modal de Edição -->
-    <div id="edit-modal" class="modal hidden" onclick="closeEditModal()">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-2xl font-bold text-gray-800">Editar Registro</h3>
-                <button onclick="closeEditModal()" class="text-gray-500 hover:text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <form id="edit-form" class="space-y-4">
-                <input type="hidden" id="edit-id">
-                <div>
-                    <label for="edit-tag" class="block text-sm font-medium text-gray-700">TAG</label>
-                    <input type="text" id="edit-tag" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" readonly>
-                </div>
-                <div>
-                    <label for="edit-equipamento" class="block text-sm font-medium text-gray-700">Equipamento</label>
-                    <input type="text" id="edit-equipamento" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-                <div>
-                    <label for="edit-status" class="block text-sm font-medium text-gray-700">Status</label>
-                    <select id="edit-status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                        <option value="Em operação">Em operação</option>
-                        <option value="Em reparo">Em reparo</option>
-                        <option value="SEM EFETIVO">Sem efetivo</option>
-                        <option value="TURNO 1">Turno 1</option>
-                        <option value="Reparo Mecanico/Sem efetivo">Reparo Mecanico/Sem efetivo</option>
-                        <option value="Reparo Mecanico">Reparo Mecanico</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="edit-motorista" class="block text-sm font-medium text-gray-700">Motorista</label>
-                    <input type="text" id="edit-motorista" list="nomes-list" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-                <div>
-                    <label for="edit-nome1" class="block text-sm font-medium text-gray-700">Nome 1</label>
-                    <input type="text" id="edit-nome1" list="nomes-list" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-                <div>
-                    <label for="edit-nome2" class="block text-sm font-medium text-gray-700">Nome 2</label>
-                    <input type="text" id="edit-nome2" list="nomes-list" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-                <div>
-                    <label for="edit-observacao" class="block text-sm font-medium text-gray-700">Observação</label>
-                    <textarea id="edit-observacao" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></textarea>
-                </div>
-                <div class="flex justify-end space-x-2">
-                    <button type="button" onclick="closeEditModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">Cancelar</button>
-                    <button type="submit" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Salvar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <!-- Modal de Confirmação -->
-    <div id="confirmation-modal" class="modal hidden" onclick="closeConfirmModal()">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="flex flex-col items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-red-500 mb-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v4a1 1 0 102 0V9a1 1 0 00-2 0z" clip-rule="evenodd" /></svg>
-                <h3 class="text-2xl font-bold text-gray-800 text-center">Tem certeza que deseja deletar este registro?</h3>
-                <div class="mt-6 flex justify-center space-x-4">
-                    <button onclick="handleDeleteConfirm()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300">Sim</button>
-                    <button onclick="closeConfirmModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-lg transition duration-300">Não</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Modal de Mensagem (Toast) -->
-    <div id="message-modal" class="modal hidden">
-        <div class="modal-content">
-            <div class="flex items-center space-x-4">
-                <div id="message-icon"></div>
-                <div id="message-text" class="text-lg font-medium"></div>
-            </div>
-            <div class="mt-6 flex justify-center">
-                <button id="message-ok-btn" onclick="closeMessageModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">OK</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Login -->
-    <div id="login-modal" class="modal hidden" onclick="closeLoginModal()">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-2xl font-bold text-gray-800">Login</h3>
-                <button onclick="closeLoginModal()" class="text-gray-500 hover:text-gray-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
-                <div>
-                    <label for="login-username" class="block text-sm font-medium text-gray-700">Usuário</label>
-                    <input type="text" id="login-username" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" required>
-                </div>
-                <div>
-                    <label for="login-password" class="block text-sm font-medium text-gray-700">Senha</label>
-                    <input type="password" id="login-password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" required>
-                </div>
-                <div class="flex justify-end">
-                    <button type="submit" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">Entrar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-</body>
-</html>
-
-                    <div class="card p-6 cursor-default hover:transform-none">
-                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Programados VS Em Operação</h2>
-                        <div class="chart-container">
-                            <canvas id="programadosOperacaoChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card p-6 mb-8 cursor-default hover:transform-none" id="details-table-container">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Detalhes dos Equipamentos</h2>
-                <div class="flex justify-end mb-4 space-x-2">
-                    <button id="export-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414L9 3.586V13a1 1 0 11-2 0V5.414L4.707 7.707a1 1 0 01-1.414-1.414l3.5-3.5a1 1 0 011.414 0l3.5 3.5a1 1 0 010 1.414L10 8.414l-1.293 1.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" />
-                        </svg>
-                        Exportar para Excel
-                    </button>
-                </div>
-                <div class="overflow-x-auto rounded-lg shadow-inner">
-                    <table class="min-w-full bg-white rounded-lg">
-                        <thead class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                            <tr>
-                                <th class="py-3 px-6 text-left">Data</th>
-                                <th class="py-3 px-6 text-left">Equipamento</th>
-                                <th class="py-3 px-6 text-left">TAG</th>
-                                <th class="py-3 px-6 text-left">Status</th>
-                                <th class="py-3 px-6 text-left">Motorista</th>
-                                <th class="py-3 px-6 text-left">Nome 1</th>
-                                <th class="py-3 px-6 text-left">Nome 2</th>
-                                <th class="py-3 px-6 text-right">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detalhes-tabela" class="text-gray-600 text-sm font-light">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="card p-6 cursor-default hover:transform-none" id="observations-table-container">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Observações</h2>
                 <div class="flex justify-end mb-4">
                     <button id="export-obs-excel-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg flex items-center">
@@ -1704,23 +1561,23 @@
                 <div id="message-text" class="text-lg font-medium"></div>
             </div>
             <div class="mt-6 flex justify-center">
-                <button id="message-ok-btn" onclick="closeMessageModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">OK</button>
+                <button id="message-ok-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300 shadow-lg">OK</button>
             </div>
         </div>
     </div>
 
     <!-- Modal de Login -->
-    <div id="login-modal" class="modal hidden" onclick="closeLoginModal()">
+    <div id="login-modal" class="modal hidden">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-2xl font-bold text-gray-800">Login</h3>
-                <button onclick="closeLoginModal()" class="text-gray-500 hover:text-gray-700">
+                <button id="close-login-modal-btn" class="text-gray-500 hover:text-gray-700">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
-            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+            <form id="login-form" class="space-y-4">
                 <div>
                     <label for="login-username" class="block text-sm font-medium text-gray-700">Usuário</label>
                     <input type="text" id="login-username" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" required>
@@ -1737,7 +1594,7 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 </body>
 </html>
-
