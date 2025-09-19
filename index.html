@@ -494,12 +494,14 @@
             document.getElementById('status-modal').classList.add('hidden');
         }
         window.closeModal = closeModal;
-        window.closeEditModal = () => {
+        function closeEditModal() {
              document.getElementById('edit-modal').classList.add('hidden');
         }
-        window.closeLoginModal = () => {
+        window.closeEditModal = closeEditModal;
+        function closeLoginModal() {
             document.getElementById('login-modal').classList.add('hidden');
         }
+        window.closeLoginModal = closeLoginModal;
         
         function showMessageModal(message, isSuccess) {
             const modal = document.getElementById('message-modal');
@@ -512,20 +514,24 @@
             text.innerText = message;
             modal.classList.remove('hidden');
         }
+        window.showMessageModal = showMessageModal;
 
         function closeMessageModal() {
             document.getElementById('message-modal').classList.add('hidden');
         }
+        window.closeMessageModal = closeMessageModal;
         
         function showConfirmModal(id) {
             entryToDeleteId = id;
             document.getElementById('confirmation-modal').classList.remove('hidden');
         }
+        window.showConfirmModal = showConfirmModal;
         
         function closeConfirmModal() {
             entryToDeleteId = null;
             document.getElementById('confirmation-modal').classList.add('hidden');
         }
+        window.closeConfirmModal = closeConfirmModal;
         
         async function handleDeleteConfirm() {
             if (entryToDeleteId) {
@@ -540,6 +546,7 @@
                 }
             }
         }
+        window.handleDeleteConfirm = handleDeleteConfirm;
 
         function updateMetrics(filteredData, allData) {
             const uniqueEquipamentos = [...new Set(allData.map(item => item.EQUIPAMENTO).filter(e => e && e.trim() !== ''))];
@@ -799,6 +806,7 @@
                 copyBtn.disabled = false;
             }
         }
+        window.gerarAnaliseDiaria = gerarAnaliseDiaria;
 
         function copyAnalysis() {
             const analysisContent = document.getElementById('analise-content');
@@ -815,6 +823,7 @@
                 showMessageModal("Não há análise para copiar.", false);
             }
         }
+        window.copyAnalysis = copyAnalysis;
         
         // Função para gerar imagem de uma seção específica
         async function captureAndDownload(elementId, fileName, buttonId) {
@@ -850,11 +859,13 @@
         function exportChartsToImage() {
             captureAndDownload('charts-and-cards-container', `relatorio_graficos_${document.getElementById('data-filtro').value}.png`, 'export-charts-btn');
         }
+        window.exportChartsToImage = exportChartsToImage;
 
         // Nova função para exportar a tabela de detalhes
         function exportTableToImage() {
             captureAndDownload('details-table-container', `relatorio_tabela_${document.getElementById('data-filtro').value}.png`, 'export-table-btn');
         }
+        window.exportTableToImage = exportTableToImage;
         
         function exportToExcel() {
             const table = document.getElementById('detalhes-tabela');
@@ -883,6 +894,7 @@
             downloadLink.click();
             document.body.removeChild(downloadLink);
         }
+        window.exportToExcel = exportToExcel;
 
         function exportObsToExcel() {
             const table = document.getElementById('observacoes-tabela');
@@ -911,6 +923,7 @@
             downloadLink.click();
             document.body.removeChild(downloadLink);
         }
+        window.exportObsToExcel = exportObsToExcel;
 
         function showSplashPage() {
             document.getElementById('splash-page').classList.remove('hidden');
@@ -1081,6 +1094,7 @@
                     </table>
                 </div>
             </div>
+
             <div class="card p-6 cursor-default hover:transform-none" id="observations-table-container">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Observações</h2>
                 <div class="flex justify-end mb-4">
